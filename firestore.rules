@@ -1,0 +1,27 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() { return request.auth != null; }
+
+    // Struttura usata dall'app Lovable/Firebase:
+    // artifacts/{APP_ID}/public/data/{collection}/{docId}
+    match /artifacts/{appId}/public/data/{collectionName}/{docId} {
+      // Lettura pubblica per totem/sala/gioco. Scrittura consentita ad utenti anonimi/autenticati
+      // perché l'app usa Firebase Auth anonimo e PIN applicativo lato UI.
+      // In produzione SaaS: restringere con tenantId/ruoli e regole per ruolo.
+      allow read: if true;
+      allow create, update, delete: if signedIn();
+    }
+
+    // Sottocollezioni future, es. eventuali log tentativi stampa.
+    match /artifacts/{appId}/public/data/{collectionName}/{docId}/{subPath=**} {
+      allow read: if true;
+      allow create, update, delete: if signedIn();
+    }
+
+    // Compatibilità eventuale con vecchie collezioni root.
+    match /{document=**} {
+      allow read, write: if signedIn();
+    }
+  }
+}

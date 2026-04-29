@@ -1,0 +1,252 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
+
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Design system Da Orazio (porting fedele 1:1 dal vecchio progetto).
+ * Token HSL originali → mappati in Tailwind v4 via @theme inline.
+ */
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+
+  --color-kiosk-gold: hsl(var(--kiosk-gold));
+  --color-kiosk-gold-light: hsl(var(--kiosk-gold-light));
+  --color-kiosk-green: hsl(var(--kiosk-green));
+  --color-kiosk-green-light: hsl(var(--kiosk-green-light));
+  --color-kiosk-red: hsl(var(--kiosk-red));
+  --color-kiosk-orange: hsl(var(--kiosk-orange));
+  --color-kiosk-surface: hsl(var(--kiosk-surface));
+  --color-kiosk-surface-hover: hsl(var(--kiosk-surface-hover));
+
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+}
+
+:root {
+  --background: 220 15% 8%;
+  --foreground: 40 10% 95%;
+
+  --card: 220 12% 12%;
+  --card-foreground: 40 10% 95%;
+
+  --popover: 220 12% 14%;
+  --popover-foreground: 40 10% 95%;
+
+  --primary: 42 100% 50%;
+  --primary-foreground: 220 15% 8%;
+
+  --secondary: 220 12% 18%;
+  --secondary-foreground: 40 10% 85%;
+
+  --muted: 220 10% 16%;
+  --muted-foreground: 220 10% 55%;
+
+  --accent: 145 60% 42%;
+  --accent-foreground: 0 0% 100%;
+
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+
+  --border: 220 12% 20%;
+  --input: 220 12% 20%;
+  --ring: 42 100% 50%;
+
+  --radius: 1rem;
+
+  --kiosk-gold: 42 100% 50%;
+  --kiosk-gold-light: 42 100% 65%;
+  --kiosk-green: 145 60% 42%;
+  --kiosk-green-light: 145 50% 55%;
+  --kiosk-red: 0 72% 51%;
+  --kiosk-orange: 25 95% 53%;
+  --kiosk-surface: 220 12% 14%;
+  --kiosk-surface-hover: 220 12% 18%;
+
+  --sidebar-background: 220 15% 8%;
+  --sidebar-foreground: 40 10% 95%;
+  --sidebar-primary: 42 100% 50%;
+  --sidebar-primary-foreground: 220 15% 8%;
+  --sidebar-accent: 220 12% 18%;
+  --sidebar-accent-foreground: 40 10% 95%;
+  --sidebar-border: 220 12% 20%;
+  --sidebar-ring: 42 100% 50%;
+}
+
+@layer base {
+  * {
+    border-color: var(--color-border);
+  }
+
+  body {
+    background-color: var(--color-background);
+    color: var(--color-foreground);
+    font-family: 'Poppins', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Anti-zoom SOLO per il totem cliente. */
+  .kiosk-customer-mode {
+    touch-action: none;
+    -ms-touch-action: none;
+    overscroll-behavior: none;
+  }
+
+  .kiosk-customer-mode .overflow-y-auto,
+  .kiosk-customer-mode .overflow-y-scroll,
+  .kiosk-customer-mode .overflow-auto,
+  .kiosk-customer-mode .kiosk-scrollbar {
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .kiosk-customer-mode .overflow-x-auto,
+  .kiosk-customer-mode .overflow-x-scroll {
+    touch-action: pan-x;
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+@layer utilities {
+  .kiosk-gradient {
+    background: linear-gradient(135deg, hsl(var(--kiosk-gold)) 0%, hsl(var(--kiosk-orange)) 100%);
+  }
+  .kiosk-gradient-green {
+    background: linear-gradient(135deg, hsl(var(--kiosk-green)) 0%, hsl(var(--kiosk-green-light)) 100%);
+  }
+  .kiosk-shadow {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+  .kiosk-glow {
+    box-shadow: 0 0 20px hsl(var(--kiosk-gold) / 0.3), 0 0 60px hsl(var(--kiosk-gold) / 0.1);
+  }
+  .kiosk-card {
+    background-color: hsl(var(--card));
+    border-radius: 1rem;
+    overflow: hidden;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+  }
+  .kiosk-card:active {
+    transform: scale(0.97);
+  }
+  .kiosk-scrollbar::-webkit-scrollbar { width: 4px; }
+  .kiosk-scrollbar::-webkit-scrollbar-track { background: transparent; }
+  .kiosk-scrollbar::-webkit-scrollbar-thumb {
+    background: hsl(var(--muted-foreground) / 0.3);
+    border-radius: 999px;
+  }
+}
+
+@layer components {
+  .input {
+    @apply rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none transition focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+}
+
+/* Sala TV: bouncing pulse for ready orders */
+@keyframes bounce-ready {
+  0%, 100% { transform: translateY(0) scale(1); box-shadow: 0 0 60px rgba(16, 185, 129, 0.7); }
+  25% { transform: translateY(-14px) scale(1.04); box-shadow: 0 0 90px rgba(16, 185, 129, 0.95); }
+  50% { transform: translateY(0) scale(1); box-shadow: 0 0 60px rgba(16, 185, 129, 0.7); }
+  75% { transform: translateY(-8px) scale(1.02); box-shadow: 0 0 80px rgba(16, 185, 129, 0.85); }
+}
+.animate-bounce-ready {
+  animation: bounce-ready 1.6s ease-in-out infinite;
+}
+
+/* Print styles thermal 80mm */
+@media print {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-image: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  body * { visibility: hidden; }
+  .print-area, .print-area * {
+    visibility: visible;
+    color: #000 !important;
+    background: #fff !important;
+    font-family: monospace, sans-serif !important;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 72mm;
+    padding: 2mm 4mm;
+    margin: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    word-break: break-word;
+    font-size: 14pt !important;
+  }
+  .print-area img {
+    max-width: 30mm !important;
+    height: auto !important;
+    display: block;
+    margin: 0 auto 2mm;
+  }
+  .print-area .print-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 2mm;
+    font-size: 13pt !important;
+  }
+  .print-area .print-price { white-space: nowrap; flex-shrink: 0; }
+  .print-area .print-total { font-size: 16pt !important; font-weight: 900; }
+  .print-area .print-order-num { font-size: 48pt !important; font-weight: 900; }
+  .print-area .print-sub { font-size: 10pt !important; }
+  @page { size: 80mm auto; margin: 0; }
+}
