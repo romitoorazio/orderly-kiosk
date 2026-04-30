@@ -3,18 +3,31 @@ import { signInAnonymously, onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 
 export function useFirebaseAuth() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(auth.currentUser);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const initAuth = async () => {
-      try { await signInAnonymously(auth); } 
-      catch (err) { console.error("Auth failed", err); } 
-      finally { setLoading(false); }
+    let cancelled = false;
+
+    const unsubscribe = onAuthStateChanged(auth, (nextUser) => {
+      if (cancelled) return;
+      setUser(nextUser);
+      setLoading(false);
+    });
+
+    if (!auth.currentUser) {
+      signInAnonymously(auth).catch((err) => {
+        console.error('Auth failed', err);
+        if (!cancelled) setLoading(false);
+      });
+    } else {
+      setLoading(false);
+    }
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
     };
-    initAuth();
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return () => unsubscribe();
   }, []);
 
   return { user, loading };
