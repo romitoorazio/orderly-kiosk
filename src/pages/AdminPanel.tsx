@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { collection, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, waitForPendingWrites } from "firebase/firestore";
 import { db, APP_ID } from "@/lib/firebase";
-import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
+import { ensureFirebaseAuthReady, useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { useFirestoreData } from "@/hooks/useFirestoreData";
 import { useActiveOrders } from "@/hooks/useActiveOrders";
 import { useArchiveCollections } from "@/hooks/useArchiveCollections";
@@ -238,7 +238,7 @@ const PosRecordCard: React.FC<{ record: any }> = ({ record }) => {
 };
 
 const AdminPanel: React.FC = () => {
-  const { user, loading: authLoading } = useFirebaseAuth();
+  const { user } = useFirebaseAuth();
   const baseData = useFirestoreData(user);
   // 🔥 Listener mirati: ordini attivi + collections archivio (solo admin).
   const activeOrders = useActiveOrders(user);
@@ -285,20 +285,17 @@ const AdminPanel: React.FC = () => {
   };
 
   const runFirebaseWrite = async (write: () => Promise<unknown>, successMessage?: string) => {
-    if (authLoading) {
-      alert("Attendi un secondo: Firebase sta completando l'accesso anonimo.");
-      return false;
-    }
-    if (!user) {
-      alert("Firebase non è autenticato: impossibile salvare. Controlla che l'accesso anonimo sia attivo nel progetto Firebase.");
-      return false;
-    }
     if (typeof navigator !== "undefined" && navigator.onLine === false) {
       alert("Sei offline: non posso sincronizzare con Firebase adesso.");
       return false;
     }
 
     try {
+      // Non fidiamoci solo dello stato React `user`: può essere ancora null
+      // anche quando Firebase sta completando l'accesso anonimo. Prima di
+      // scrivere forziamo/attendiamo l'autenticazione reale di Firebase Auth.
+      await ensureFirebaseAuthReady();
+
       await write();
       await waitForFirebaseSync();
       if (successMessage) alert(successMessage);
@@ -311,6 +308,7 @@ const AdminPanel: React.FC = () => {
       return false;
     }
   };
+
 
   // === SALVATAGGI ===
   const saveDept = async () => {
