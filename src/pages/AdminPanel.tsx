@@ -18,7 +18,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { collection, doc, setDoc, addDoc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, waitForPendingWrites } from "firebase/firestore";
 import { db, APP_ID } from "@/lib/firebase";
 import { useFirebaseAuth } from "@/hooks/useFirebaseAuth";
 import { useFirestoreData } from "@/hooks/useFirestoreData";
@@ -238,7 +238,7 @@ const PosRecordCard: React.FC<{ record: any }> = ({ record }) => {
 };
 
 const AdminPanel: React.FC = () => {
-  const { user } = useFirebaseAuth();
+  const { user, loading: authLoading } = useFirebaseAuth();
   const baseData = useFirestoreData(user);
   // 🔥 Listener mirati: ordini attivi + collections archivio (solo admin).
   const activeOrders = useActiveOrders(user);
@@ -272,6 +272,46 @@ const AdminPanel: React.FC = () => {
     setWheelDraft(data.wheelSettings || {});
   }, [data.wheelSettings]);
 
+  const waitForFirebaseSync = async () => {
+    await Promise.race([
+      waitForPendingWrites(db),
+      new Promise((_, reject) =>
+        window.setTimeout(
+          () => reject(new Error("Firebase non ha confermato la sincronizzazione entro 5 secondi.")),
+          5000,
+        ),
+      ),
+    ]);
+  };
+
+  const runFirebaseWrite = async (write: () => Promise<unknown>, successMessage?: string) => {
+    if (authLoading) {
+      alert("Attendi un secondo: Firebase sta completando l'accesso anonimo.");
+      return false;
+    }
+    if (!user) {
+      alert("Firebase non è autenticato: impossibile salvare. Controlla che l'accesso anonimo sia attivo nel progetto Firebase.");
+      return false;
+    }
+    if (typeof navigator !== "undefined" && navigator.onLine === false) {
+      alert("Sei offline: non posso sincronizzare con Firebase adesso.");
+      return false;
+    }
+
+    try {
+      await write();
+      await waitForFirebaseSync();
+      if (successMessage) alert(successMessage);
+      return true;
+    } catch (error: any) {
+      console.error("[Admin Firebase write failed]", error);
+      const code = error?.code ? ` (${error.code})` : "";
+      const message = error?.message ? `\n\n${error.message}` : "";
+      alert(`Errore durante il salvataggio su Firebase${code}.${message}`);
+      return false;
+    }
+  };
+
   // === SALVATAGGI ===
   const saveDept = async () => {
     if (!editingDept?.name?.trim()) {
@@ -287,11 +327,13 @@ const AdminPanel: React.FC = () => {
         imageUrl: editingDept.imageUrl || "",
         sortOrder: Number(editingDept.sortOrder) || 0,
         available: editingDept.available !== false,
+        updatedAt: serverTimestamp(),
       };
-      if (editingDept.id) await updateDoc(dataDoc("departments", editingDept.id), deptData);
-      else await addDoc(col("departments"), deptData);
-      setEditingDept(null);
-      alert("Reparto salvato con successo!");
+      const ok = await runFirebaseWrite(async () => {
+        if (editingDept.id) await updateDoc(dataDoc("departments", editingDept.id), deptData);
+        else await addDoc(col("departments"), { ...deptData, createdAt: serverTimestamp() });
+      }, "Reparto salvato e sincronizzato con Firebase!");
+      if (ok) setEditingDept(null);
     } catch (error) {
       console.error(error);
       alert("Errore durante il salvataggio.");
@@ -303,7 +345,7 @@ const AdminPanel: React.FC = () => {
   const deleteDept = async (id: string) => {
     if (!window.confirm("Eliminare definitivamente questo reparto?")) return;
     try {
-      await deleteDoc(dataDoc("departments", id));
+      await runFirebaseWrite(() => deleteDoc(dataDoc("departments", id)), "Reparto eliminato e Firebase sincronizzato.");
     } catch (error) {
       console.error(error);
       alert("Errore durante l'eliminazione.");
@@ -332,11 +374,13 @@ const AdminPanel: React.FC = () => {
         isBaseProduct: editingItem.isBaseProduct || false,
         isSpecial: editingItem.isSpecial || false,
         requiresCottura: (editingItem as MenuItem & { requiresCottura?: boolean }).requiresCottura || false,
+        updatedAt: serverTimestamp(),
       };
-      if (editingItem.id) await updateDoc(dataDoc("menu_items", editingItem.id), itemData);
-      else await addDoc(col("menu_items"), itemData);
-      setEditingItem(null);
-      alert("Prodotto salvato con successo!");
+      const ok = await runFirebaseWrite(async () => {
+        if (editingItem.id) await updateDoc(dataDoc("menu_items", editingItem.id), itemData);
+        else await addDoc(col("menu_items"), { ...itemData, createdAt: serverTimestamp() });
+      }, "Prodotto salvato e sincronizzato con Firebase!");
+      if (ok) setEditingItem(null);
     } catch (error) {
       console.error(error);
       alert("Errore durante il salvataggio.");
@@ -348,7 +392,7 @@ const AdminPanel: React.FC = () => {
   const deleteItem = async (id: string) => {
     if (!window.confirm("Eliminare questo prodotto?")) return;
     try {
-      await deleteDoc(dataDoc("menu_items", id));
+      await runFirebaseWrite(() => deleteDoc(dataDoc("menu_items", id)), "Prodotto eliminato e Firebase sincronizzato.");
     } catch (error) {
       console.error(error);
       alert("Errore durante l'eliminazione.");
@@ -369,11 +413,13 @@ const AdminPanel: React.FC = () => {
         imageUrl: editingIng.imageUrl || "",
         sortOrder: Number(editingIng.sortOrder) || 0,
         available: (editingIng as Ingredient & { available?: boolean }).available !== false,
+        updatedAt: serverTimestamp(),
       };
-      if (editingIng.id) await updateDoc(dataDoc("ingredients", editingIng.id), ingData);
-      else await addDoc(col("ingredients"), ingData);
-      setEditingIng(null);
-      alert("Ingrediente salvato con successo!");
+      const ok = await runFirebaseWrite(async () => {
+        if (editingIng.id) await updateDoc(dataDoc("ingredients", editingIng.id), ingData);
+        else await addDoc(col("ingredients"), { ...ingData, createdAt: serverTimestamp() });
+      }, "Ingrediente salvato e sincronizzato con Firebase!");
+      if (ok) setEditingIng(null);
     } catch (error) {
       console.error(error);
       alert("Errore durante il salvataggio.");
@@ -385,7 +431,7 @@ const AdminPanel: React.FC = () => {
   const deleteIng = async (id: string) => {
     if (!window.confirm("Eliminare ingrediente?")) return;
     try {
-      await deleteDoc(dataDoc("ingredients", id));
+      await runFirebaseWrite(() => deleteDoc(dataDoc("ingredients", id)), "Ingrediente eliminato e Firebase sincronizzato.");
     } catch (error) {
       console.error(error);
       alert("Errore durante l'eliminazione.");
@@ -395,7 +441,7 @@ const AdminPanel: React.FC = () => {
   // === SETTINGS ===
   const updateBeeperFlags = async (patch: Partial<typeof flags.beepers>) => {
     try {
-      await saveFeatureFlags({ beepers: { ...flags.beepers, ...patch } });
+      await runFirebaseWrite(() => saveFeatureFlags({ beepers: { ...flags.beepers, ...patch } }));
     } catch (error) {
       console.error(error);
       alert("Errore salvataggio configurazione beeper.");
@@ -412,10 +458,10 @@ const AdminPanel: React.FC = () => {
       flags.beepers.rangeMin,
     );
     try {
-      await Promise.all([
+      await runFirebaseWrite(() => Promise.all([
         saveFeatureFlags({ beepers: { ...flags.beepers, rangeMin, rangeMax } }),
-        setDoc(settingsDoc("beepers"), { status }, { merge: true }),
-      ]);
+        setDoc(settingsDoc("beepers"), { status, updatedAt: serverTimestamp() }, { merge: true }),
+      ]));
     } catch (error) {
       console.error(error);
       alert("Errore salvataggio range beeper.");
@@ -435,7 +481,7 @@ const AdminPanel: React.FC = () => {
       const idx = num - rangeMin;
       if (idx < 0 || idx >= current.length) return;
       current[idx] = !current[idx];
-      await setDoc(settingsDoc("beepers"), { status: current }, { merge: true });
+      await runFirebaseWrite(() => setDoc(settingsDoc("beepers"), { status: current, updatedAt: serverTimestamp() }, { merge: true }));
     } catch (error) {
       console.error(error);
       alert("Errore beeper.");
@@ -443,8 +489,10 @@ const AdminPanel: React.FC = () => {
   };
   const savePromo = async () => {
     try {
-      await setDoc(settingsDoc("promo"), promoDraft, { merge: true });
-      alert("Promo salvata!");
+      await runFirebaseWrite(
+        () => setDoc(settingsDoc("promo"), { ...promoDraft, updatedAt: serverTimestamp() }, { merge: true }),
+        "Promo salvata e sincronizzata con Firebase!",
+      );
     } catch (error) {
       console.error(error);
       alert("Errore promo.");
@@ -452,11 +500,14 @@ const AdminPanel: React.FC = () => {
   };
   const savePayment = async () => {
     try {
-      await setDoc(settingsDoc("payment"), {
-        ...paymentDraft,
-        backendUrl: resolveBackendUrl(paymentDraft.backendUrl, window.location.origin),
-      }, { merge: true });
-      alert("Impostazioni POS salvate!");
+      await runFirebaseWrite(
+        () => setDoc(settingsDoc("payment"), {
+          ...paymentDraft,
+          backendUrl: resolveBackendUrl(paymentDraft.backendUrl, window.location.origin),
+          updatedAt: serverTimestamp(),
+        }, { merge: true }),
+        "Impostazioni POS salvate e sincronizzate con Firebase!",
+      );
     } catch (error) {
       console.error(error);
       alert("Errore pagamenti.");
@@ -465,12 +516,14 @@ const AdminPanel: React.FC = () => {
   const saveSecurity = async (settings: { pin?: string; productionMode?: boolean }) => {
     try {
       const pin = typeof settings.pin === "string" ? settings.pin.replace(/\D/g, "") : data.adminPin;
-      await setDoc(
-        settingsDoc("admin"),
-        { pin, productionMode: settings.productionMode ?? data.securitySettings.productionMode },
-        { merge: true },
+      await runFirebaseWrite(
+        () => setDoc(
+          settingsDoc("admin"),
+          { pin, productionMode: settings.productionMode ?? data.securitySettings.productionMode, updatedAt: serverTimestamp() },
+          { merge: true },
+        ),
+        "Impostazioni sicurezza salvate e sincronizzate con Firebase!",
       );
-      alert("Impostazioni sicurezza salvate!");
     } catch (error) {
       console.error(error);
       alert("Errore sicurezza.");
@@ -478,7 +531,7 @@ const AdminPanel: React.FC = () => {
   };
   const savePrinter = async (active: boolean) => {
     try {
-      await setDoc(settingsDoc("printer"), { active }, { merge: true });
+      await runFirebaseWrite(() => setDoc(settingsDoc("printer"), { active, updatedAt: serverTimestamp() }, { merge: true }));
     } catch (error) {
       console.error(error);
       alert("Errore stampante.");
@@ -486,8 +539,10 @@ const AdminPanel: React.FC = () => {
   };
   const saveWheel = async () => {
     try {
-      await setDoc(settingsDoc("wheel"), wheelDraft, { merge: true });
-      alert("Impostazioni Ruota salvate!");
+      await runFirebaseWrite(
+        () => setDoc(settingsDoc("wheel"), { ...wheelDraft, updatedAt: serverTimestamp() }, { merge: true }),
+        "Impostazioni Ruota salvate e sincronizzate con Firebase!",
+      );
     } catch (error) {
       console.error(error);
       alert("Errore ruota.");
@@ -544,9 +599,9 @@ const AdminPanel: React.FC = () => {
   const labelClass = "text-xs font-black text-slate-500 mb-1 ml-1 uppercase tracking-widest";
 
   return (
-    <div className="h-screen bg-slate-50 flex flex-col overflow-hidden font-sans text-slate-900 uppercase">
+    <div className="h-[100dvh] min-h-0 bg-slate-50 flex flex-col overflow-hidden font-sans text-slate-900 uppercase">
       {/* HEADER E TABS */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between shadow-sm z-20">
+      <div className="shrink-0 bg-white border-b border-slate-200 px-4 md:px-6 py-4 flex items-center justify-between shadow-sm z-20">
         <div className="flex items-center gap-4">
           <button
             onClick={() => window.history.back()}
@@ -572,7 +627,7 @@ const AdminPanel: React.FC = () => {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 md:p-8 bg-[#f8fafc]">
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-4 md:p-8 bg-[#f8fafc] kiosk-scrollbar">
         {/* === TAB MODULI (Fase A.2.1) === */}
         {tab === "moduli" && (
           <div className="max-w-6xl mx-auto normal-case">
@@ -660,7 +715,7 @@ const AdminPanel: React.FC = () => {
                       </button>
                       <button
                         onClick={async () => {
-                          await updateDoc(dataDoc("menu_items", item.id), { available: !(item.available !== false) });
+                          await runFirebaseWrite(() => updateDoc(dataDoc("menu_items", item.id), { available: !(item.available !== false), updatedAt: serverTimestamp() }));
                         }}
                         className={`p-2 rounded-lg transition-colors ${item.available !== false ? "bg-slate-100 text-slate-400 hover:bg-slate-200" : "bg-red-50 text-red-600"}`}
                       >
@@ -696,7 +751,7 @@ const AdminPanel: React.FC = () => {
               .map((dept) => (
                 <div
                   key={dept.id}
-                  className={`bg-white rounded-2xl p-5 flex items-center justify-between shadow-sm border border-slate-200 transition-all ${dept.available === false ? "opacity-60 grayscale" : ""}`}
+                  className={`bg-white rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm border border-slate-200 transition-all ${dept.available === false ? "opacity-60 grayscale" : ""}`}
                 >
                   <div className="flex items-center gap-4">
                     <div
@@ -706,10 +761,10 @@ const AdminPanel: React.FC = () => {
                     </div>
                     <p className="font-black text-xl text-slate-800">{dept.name}</p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 self-end sm:self-auto">
                     <button
                       onClick={async () => {
-                        await updateDoc(dataDoc("departments", dept.id), { available: !(dept.available !== false) });
+                        await runFirebaseWrite(() => updateDoc(dataDoc("departments", dept.id), { available: !(dept.available !== false), updatedAt: serverTimestamp() }));
                       }}
                       className="p-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-500 transition-all active:scale-90 shadow-sm"
                     >
@@ -801,9 +856,10 @@ const AdminPanel: React.FC = () => {
                       </button>
                       <button
                         onClick={async () => {
-                          await updateDoc(dataDoc("ingredients", ing.id), {
+                          await runFirebaseWrite(() => updateDoc(dataDoc("ingredients", ing.id), {
                             available: !((ing as Ingredient & { available?: boolean }).available !== false),
-                          });
+                            updatedAt: serverTimestamp(),
+                          }));
                         }}
                         className={`flex-1 p-2 rounded-lg flex justify-center transition-colors ${(ing as Ingredient & { available?: boolean }).available !== false ? "bg-slate-100 text-slate-400 hover:bg-slate-200" : "bg-red-50 text-red-600 hover:bg-red-100"}`}
                       >
@@ -1113,13 +1169,13 @@ const AdminPanel: React.FC = () => {
                       </div>
                     </div>
                     <button
-                      onClick={() => updateDoc(dataDoc("leads", lead.id), { redeemed: !lead.redeemed })}
+                      onClick={() => runFirebaseWrite(() => updateDoc(dataDoc("leads", lead.id), { redeemed: !lead.redeemed, updatedAt: serverTimestamp() }))}
                       className={`px-6 py-3 rounded-xl font-black text-xs transition-all uppercase ${lead.redeemed ? "bg-slate-200 text-slate-500" : "bg-indigo-600 text-white shadow-lg"}`}
                     >
                       {lead.redeemed ? "RITIRATO ✅" : "CONSEGNA PREMIO"}
                     </button>
                     <button
-                      onClick={() => deleteDoc(dataDoc("leads", lead.id))}
+                      onClick={() => runFirebaseWrite(() => deleteDoc(dataDoc("leads", lead.id)))}
                       className="p-3 text-red-500 ml-2 hover:bg-red-50 rounded-xl transition-all"
                     >
                       <Trash2 size={20} />
@@ -1547,8 +1603,8 @@ const AdminPanel: React.FC = () => {
 
       {/* MODAL MODIFICA REPARTO */}
       {editingDept && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 uppercase">
-          <div className="bg-white rounded-[3rem] p-10 w-full max-w-md shadow-2xl border-4 border-white animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-md flex items-start md:items-center justify-center p-3 md:p-4 overflow-y-auto uppercase">
+          <div className="bg-white rounded-[2rem] md:rounded-[3rem] p-5 md:p-10 my-6 w-full max-w-md max-h-[calc(100dvh-3rem)] overflow-y-auto shadow-2xl border-4 border-white animate-in zoom-in-95 kiosk-scrollbar">
             <h3 className="text-3xl font-black text-slate-800 mb-8 italic uppercase">REPARTO</h3>
             <div className="space-y-6">
               <div>
@@ -1626,8 +1682,8 @@ const AdminPanel: React.FC = () => {
 
       {/* MODAL MODIFICA INGREDIENTE */}
       {editingIng && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 uppercase">
-          <div className="bg-white rounded-[3rem] p-10 w-full max-w-md shadow-2xl border-4 border-white animate-in zoom-in-95">
+        <div className="fixed inset-0 z-[100] bg-slate-900/80 backdrop-blur-md flex items-start md:items-center justify-center p-3 md:p-4 overflow-y-auto uppercase">
+          <div className="bg-white rounded-[2rem] md:rounded-[3rem] p-5 md:p-10 my-6 w-full max-w-md max-h-[calc(100dvh-3rem)] overflow-y-auto shadow-2xl border-4 border-white animate-in zoom-in-95 kiosk-scrollbar">
             <h3 className="text-3xl font-black text-slate-800 mb-8 italic uppercase">INGREDIENTE</h3>
             <div className="space-y-6">
               <div>
