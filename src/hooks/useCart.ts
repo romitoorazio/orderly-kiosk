@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import type { CartItem, MenuItem } from "@/lib/constants";
+import { enrichCartItemRouting } from "@/lib/orderRouting";
 
 const CART_KEY = "orazio_cart_session";
 
@@ -49,7 +50,7 @@ export function useCart() {
         }
         return [
           ...prev,
-          {
+          enrichCartItemRouting({
             cartId: Date.now() + Math.random(),
             signature,
             id: item.id || String(Date.now()),
@@ -61,7 +62,9 @@ export function useCart() {
             defaultIngredients: item.defaultIngredients || [],
             quantity: qty,
             paid: false,
-          },
+            departmentId: (item as any).departmentId || (item as any).department || "",
+            productionDeptIds: (item as any).productionDeptIds || (item as any).destinationDeptIds || [],
+          }),
         ];
       });
     },
