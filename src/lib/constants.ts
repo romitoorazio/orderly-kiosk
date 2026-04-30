@@ -69,6 +69,8 @@ export type MenuItem = {
   sortOrder?: number;
   formats?: MenuItemFormat[];
   contpiattoDeptId?: string;
+  productionDeptIds?: string[];
+  destinationDeptIds?: string[];
   isBaseProduct?: boolean;
   isSpecial?: boolean;
 };
@@ -86,6 +88,11 @@ export type CartItem = {
   paid: boolean;
   _formato_scelto?: string;
   _contorni?: string[];
+  departmentId?: string;
+  department?: string;
+  productionDeptIds?: string[];
+  destinationDeptIds?: string[];
+  destinationLabels?: string[];
 };
 
 export type Order = {
