@@ -18,30 +18,25 @@ jobs:
           python-version: '3.12'
       - name: Install edge-tts
         run: python -m pip install --upgrade edge-tts
-      - name: Generate Italian female voice samples
+      - name: Generate Elsa rate samples
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p tts-samples
-          voices=(
-            it-IT-ElsaNeural
-            it-IT-IsabellaNeural
-            it-IT-IsabellaMultilingualNeural
-            it-IT-FabiolaNeural
-            it-IT-FiammaNeural
-            it-IT-ImeldaNeural
-            it-IT-IrmaNeural
-            it-IT-PalmiraNeural
-            it-IT-PierinaNeural
-          )
-          for voice in "${voices[@]}"; do
-            echo "Generating $voice"
-            edge-tts --voice "$voice" --text "Numero sette" --write-media "tts-samples/${voice}.mp3" || true
+          for rate in 0 10 20 30 40 45 50 55 60; do
+            if [ "$rate" = "0" ]; then
+              edge-tts --voice it-IT-ElsaNeural --text "Numero sette" --write-media "tts-samples/Elsa_rate_0.mp3"
+            else
+              edge-tts --voice it-IT-ElsaNeural --rate="-${rate}%" --text "Numero sette" --write-media "tts-samples/Elsa_rate_minus_${rate}.mp3"
+            fi
+          done
+          for rate in 40 50; do
+            edge-tts --voice it-IT-IsabellaNeural --rate="-${rate}%" --text "Numero sette" --write-media "tts-samples/Isabella_rate_minus_${rate}.mp3"
           done
           ls -lh tts-samples
       - name: Upload samples
         uses: actions/upload-artifact@v4
         with:
-          name: tts-voice-match-samples
+          name: tts-rate-match-samples
           path: tts-samples/*.mp3
           if-no-files-found: error
