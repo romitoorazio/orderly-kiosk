@@ -1,0 +1,82 @@
+name: Build static number audio
+
+on:
+  push:
+    branches:
+      - agent/static-number-audio
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/static-number-audio
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install edge-tts
+        run: python -m pip install --upgrade edge-tts
+      - name: Generate static numbers 1-99
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p public/sounds/numbers
+          for n in $(seq 1 99); do
+            file=$(printf 'numero-%02d.mp3' "$n")
+            edge-tts \
+              --voice it-IT-ElsaNeural \
+              --rate='+0%' \
+              --volume='+0%' \
+              --pitch='+0Hz' \
+              --text "Numero $n" \
+              --write-media "public/sounds/numbers/$file"
+          done
+      - name: Wire static voice into CustomerTotem
+        shell: python
+        run: |
+          from pathlib import Path
+          p = Path('src/pages/CustomerTotem.tsx')
+          text = p.read_text(encoding='utf-8')
+
+          if 'const getOrderNumberAudioUrl' not in text:
+              anchor = 'let globalAudioCtx: AudioContext | null = null;\n'
+              insert = '''let globalAudioCtx: AudioContext | null = null;\n\n// 🔊 Annunci numeri ordine: file MP3 statici, nessuna API/TTS durante il servizio.\nconst getOrderNumberAudioUrl = (value: unknown): string | null => {\n  const n = Number(value);\n  if (!Number.isInteger(n) || n < 1 || n > 99) return null;\n  return `/sounds/numbers/numero-${String(n).padStart(2, "0")}.mp3`;\n};\n'''
+              if anchor not in text:
+                  raise SystemExit('Anchor globalAudioCtx non trovato')
+              text = text.replace(anchor, insert, 1)
+
+          if 'announcedOrderIdsRef' not in text:
+              anchor = '  const paymentErrorTimerRef = useRef<any>(null);\n'
+              insert = '''  const paymentErrorTimerRef = useRef<any>(null);\n  // 🔊 Dedup annuncio vocale per evitare ripetizioni su rerender.\n  const announcedOrderIdsRef = useRef<Set<string>>(new Set());\n'''
+              if anchor not in text:
+                  raise SystemExit('Anchor paymentErrorTimerRef non trovato')
+              text = text.replace(anchor, insert, 1)
+
+          if 'const playOrderNumber = useCallback' not in text:
+              anchor = '  const payment = usePayment({\n'
+              insert = '''  const playOrderNumber = useCallback((order: any) => {\n    if (isMobileMode) return;\n\n    const url = getOrderNumberAudioUrl(order?.number);\n    if (!url) return;\n\n    const key = String(order?.id || `number-${order?.number}`);\n    if (announcedOrderIdsRef.current.has(key)) return;\n    announcedOrderIdsRef.current.add(key);\n\n    // Lascia finire il ding prima della voce.\n    window.setTimeout(() => {\n      try {\n        const audio = new Audio(url);\n        audio.preload = "auto";\n        audio.volume = 1;\n        void audio.play().catch((error) => {\n          console.warn("[VOICE] Riproduzione numero non riuscita", { url, error });\n        });\n      } catch (error) {\n        console.warn("[VOICE] File numero non riproducibile", { url, error });\n      }\n    }, 1050);\n  }, [isMobileMode]);\n\n  const payment = usePayment({\n'''
+              if anchor not in text:
+                  raise SystemExit('Anchor usePayment non trovato')
+              text = text.replace(anchor, insert, 1)
+
+          if '      playOrderNumber(order);\n      setOrderComplete(order);' not in text:
+              anchor = '    onOrderComplete: (order: any) => {\n      setOrderComplete(order); setCart([]); setCurrentStep("welcome");\n'
+              insert = '    onOrderComplete: (order: any) => {\n      playOrderNumber(order);\n      setOrderComplete(order); setCart([]); setCurrentStep("welcome");\n'
+              if anchor not in text:
+                  raise SystemExit('Anchor onOrderComplete non trovato')
+              text = text.replace(anchor, insert, 1)
+
+          p.write_text(text, encoding='utf-8')
+      - name: Commit generated static audio
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add public/sounds/numbers src/pages/CustomerTotem.tsx
+          git commit -m 'feat: add static spoken order numbers [skip ci]'
+          git push origin HEAD:agent/static-number-audio
