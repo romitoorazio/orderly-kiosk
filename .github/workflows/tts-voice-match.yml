@@ -1,0 +1,47 @@
+name: TTS voice match
+
+on:
+  push:
+    branches:
+      - agent/tts-voice-match-test
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install edge-tts
+        run: python -m pip install --upgrade edge-tts
+      - name: Generate Italian female voice samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p tts-samples
+          voices=(
+            it-IT-ElsaNeural
+            it-IT-IsabellaNeural
+            it-IT-IsabellaMultilingualNeural
+            it-IT-FabiolaNeural
+            it-IT-FiammaNeural
+            it-IT-ImeldaNeural
+            it-IT-IrmaNeural
+            it-IT-PalmiraNeural
+            it-IT-PierinaNeural
+          )
+          for voice in "${voices[@]}"; do
+            echo "Generating $voice"
+            edge-tts --voice "$voice" --text "Numero sette" --write-media "tts-samples/${voice}.mp3" || true
+          done
+          ls -lh tts-samples
+      - name: Upload samples
+        uses: actions/upload-artifact@v4
+        with:
+          name: tts-voice-match-samples
+          path: tts-samples/*.mp3
+          if-no-files-found: error
