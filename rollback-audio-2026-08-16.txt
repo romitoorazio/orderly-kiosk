@@ -1,0 +1,1 @@
+Rollback immediato della libreria audio Elsa. Base stabile: b7e44b72939758a77f0d9f37ed5ddcb1d03e1123
