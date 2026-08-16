@@ -47,6 +47,13 @@ const ACTIVE_STATUSES = new Set(["in_preparation", "ready"]);
 
 let globalAudioCtx: AudioContext | null = null;
 
+// 🔊 Annunci numeri ordine: file MP3 statici, nessuna API/TTS durante il servizio.
+const getOrderNumberAudioUrl = (value: unknown): string | null => {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n < 1 || n > 99) return null;
+  return `/sounds/numbers/numero-${String(n).padStart(2, "0")}.mp3`;
+};
+
 const LibroAllergeni: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
   return (
@@ -163,6 +170,8 @@ const CustomerTotem: React.FC = () => {
   const warningActiveRef = useRef<boolean>(false);
   // ⏱️ Auto-reset dopo "pagamento fallito"
   const paymentErrorTimerRef = useRef<any>(null);
+  // 🔊 Dedup annuncio vocale per evitare ripetizioni su rerender.
+  const announcedOrderIdsRef = useRef<Set<string>>(new Set());
   const kioskExitTimer = useRef<any>(null);
   const [showKioskExitPin, setShowKioskExitPin] = useState(false);
   const [showOperatorChoice, setShowOperatorChoice] = useState(false);
@@ -230,9 +239,35 @@ const CustomerTotem: React.FC = () => {
     } catch {}
   }, []);
 
+  const playOrderNumber = useCallback((order: any) => {
+    if (isMobileMode) return;
+
+    const url = getOrderNumberAudioUrl(order?.number);
+    if (!url) return;
+
+    const key = String(order?.id || `number-${order?.number}`);
+    if (announcedOrderIdsRef.current.has(key)) return;
+    announcedOrderIdsRef.current.add(key);
+
+    // Lascia finire il ding prima della voce.
+    window.setTimeout(() => {
+      try {
+        const audio = new Audio(url);
+        audio.preload = "auto";
+        audio.volume = 1;
+        void audio.play().catch((error) => {
+          console.warn("[VOICE] Riproduzione numero non riuscita", { url, error });
+        });
+      } catch (error) {
+        console.warn("[VOICE] File numero non riproducibile", { url, error });
+      }
+    }, 1050);
+  }, [isMobileMode]);
+
   const payment = usePayment({
     isDemoMode,
     onOrderComplete: (order: any) => {
+      playOrderNumber(order);
       setOrderComplete(order); setCart([]); setCurrentStep("welcome");
       setShowPromoModal(false); setIsMobileCartOpen(false);
       payment.resetPayment(); setTimeout(() => setOrderComplete(null), 6000);
